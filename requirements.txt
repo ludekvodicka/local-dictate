@@ -1,0 +1,6 @@
+onnx-asr[cpu,hub]
+sounddevice
+keyboard
+pyperclip
+numpy
+requests

@@ -1,0 +1,12 @@
+{
+  "hotkey": "ctrl+space",
+  "asr_model": "onnx-community/whisper-large-v3-turbo",
+  "language": "cs",
+  "sample_rate": 16000,
+  "min_recording_seconds": 0.3,
+  "cleanup_enabled": true,
+  "ollama_url": "http://localhost:11434",
+  "ollama_model": "qwen2.5:1.5b",
+  "ollama_timeout": 5,
+  "cleanup_prompt": "Clean up this dictated text. Remove filler words (um, uh, like, you know, so, basically). Fix minor grammar. Keep the meaning exactly the same. Output only the cleaned text, nothing else."
+}
