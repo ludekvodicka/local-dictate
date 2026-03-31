@@ -86,26 +86,46 @@ The tool works on both CPU and GPU. Here's what to expect:
 
 **Recommendation for CPU:** Use `whisper-small` or `parakeet` for acceptable speed. `whisper-large-v3-turbo` is accurate but slow on CPU.
 
-### GPU (NVIDIA, with CUDA)
+### GPU acceleration options
 
-With GPU acceleration, even the largest models run in under 1 second. To enable:
+The tool auto-detects and uses the best available provider (CUDA > DirectML > CPU).
 
-1. Install [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-downloads)
-2. Replace the CPU onnxruntime with GPU version:
-   ```bash
-   pip uninstall onnxruntime
-   pip install onnxruntime-gpu
-   ```
-3. The tool auto-detects CUDA and uses GPU if available
+#### Speed comparison (whisper-large-v3-turbo, 3s clip)
 
-| Model | GPU Speed (3s clip) | Notes |
+| Provider | Speed | Setup complexity |
 |---|---|---|
-| `whisper-base` | ~0.1s | instant |
-| `onnx-community/whisper-small` | ~0.1-0.2s | instant |
-| `nemo-parakeet-tdt-0.6b-v3` | ~0.1s | fastest ASR model |
-| `onnx-community/whisper-large-v3-turbo` | ~0.3-0.5s | best quality, still fast |
+| CPU | ~5-10s | None |
+| **DirectML** | **~1-3s** | Easy — just install one pip package |
+| **CUDA** | **~0.3-0.5s** | Requires CUDA 12.x + cuDNN 9.x |
 
-**Recommendation for GPU:** Use `whisper-large-v3-turbo` for best quality — speed is no longer a concern.
+#### Option A: DirectML (easy, any DirectX 12 GPU)
+
+Works with NVIDIA, AMD, and Intel GPUs. No CUDA installation needed.
+
+```bash
+pip uninstall onnxruntime
+pip install onnxruntime-directml
+```
+
+#### Option B: CUDA (fastest, NVIDIA only)
+
+Requires [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-12-8-0-download-archive) and [cuDNN 9.x](https://developer.nvidia.com/cudnn-downloads). Note: CUDA 13.x is **not yet supported** by onnxruntime.
+
+```bash
+pip uninstall onnxruntime
+pip install onnxruntime-gpu
+```
+
+#### Model speed comparison (GPU)
+
+| Model | DirectML (3s clip) | CUDA (3s clip) | Notes |
+|---|---|---|---|
+| `whisper-base` | ~0.3-0.5s | ~0.1s | fastest |
+| `onnx-community/whisper-small` | ~0.5-1s | ~0.1-0.2s | good balance |
+| `nemo-parakeet-tdt-0.6b-v3` | ~0.3-0.5s | ~0.1s | fastest ASR model |
+| `onnx-community/whisper-large-v3-turbo` | ~1-3s | ~0.3-0.5s | best multilingual quality |
+
+**Recommendation:** Use DirectML for quick setup. Use CUDA for best performance if you have CUDA 12.x installed.
 
 ### GPU VRAM requirements
 

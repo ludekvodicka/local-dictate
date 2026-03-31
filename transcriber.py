@@ -31,15 +31,19 @@ def load_model(model_name="nemo-parakeet-tdt-0.6b-v3", language=None, use_gpu=Tr
         try:
             import onnxruntime
             available = onnxruntime.get_available_providers()
-            if "CUDAExecutionProvider" in available:
-                _model = onnx_asr.load_model(
-                    model_name,
-                    providers=[("CUDAExecutionProvider", {})],
-                )
-                print(f"  ASR model loaded: {model_name} (GPU/CUDA)")
-                return
-            else:
-                print("  CUDA not available, using CPU")
+            # Try CUDA first, then DirectML
+            for provider, label in [
+                ("CUDAExecutionProvider", "GPU/CUDA"),
+                ("DmlExecutionProvider", "GPU/DirectML"),
+            ]:
+                if provider in available:
+                    _model = onnx_asr.load_model(
+                        model_name,
+                        providers=[(provider, {})],
+                    )
+                    print(f"  ASR model loaded: {model_name} ({label})")
+                    return
+            print("  No GPU provider available, using CPU")
         except Exception as e:
             print(f"  GPU check failed ({e}), using CPU")
 
