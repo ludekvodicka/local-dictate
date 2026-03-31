@@ -33,6 +33,10 @@ def main():
     asr_model = config.get("asr_model", "nemo-parakeet-tdt-0.6b-v3")
     language = config.get("language", None)
 
+    # Command-line override: python main.py <model>
+    if len(sys.argv) > 1:
+        asr_model = sys.argv[1]
+
     print("=" * 50)
     print("  Voice Dictation Tool")
     print("=" * 50)

@@ -1,6 +1,6 @@
 {
   "hotkey": "ctrl+space",
-  "asr_model": "onnx-community/whisper-large-v3-turbo",
+  "asr_model": "onnx-community/whisper-large-v3-ONNX",
   "language": "cs",
   "sample_rate": 16000,
   "min_recording_seconds": 0.3,

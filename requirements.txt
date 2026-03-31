@@ -1,5 +1,7 @@
 onnx-asr[cpu,hub]
+faster-whisper
 sounddevice
+soundfile
 keyboard
 pyperclip
 numpy
