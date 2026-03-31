@@ -59,10 +59,17 @@ def _load_onnx(model_name, use_gpu):
                 ("DmlExecutionProvider", "GPU/DirectML"),
             ]:
                 if provider in available:
-                    _model = onnx_asr.load_model(model_name, providers=[(provider, {})])
-                    print(f"  ASR: {model_name} (onnx-asr, {label})")
-                    return
-            print("  No GPU provider, using CPU")
+                    try:
+                        _model = onnx_asr.load_model(model_name, providers=[(provider, {})])
+                        # Quick test to verify GPU actually works with this model
+                        import numpy as np
+                        _model.recognize(np.zeros(16000, dtype=np.float32), sample_rate=16000)
+                        print(f"  ASR: {model_name} (onnx-asr, {label})")
+                        return
+                    except Exception as e:
+                        print(f"  {label} failed for this model, trying next...")
+                        _model = None
+            print("  No working GPU provider, using CPU")
         except Exception as e:
             print(f"  GPU failed ({e}), using CPU")
 
@@ -174,7 +181,7 @@ def _transcribe_cpp(audio, sample_rate):
         if _language:
             cmd.extend(["-l", _language])
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         return result.stdout.strip()
     finally:
         os.unlink(tmp_path)
@@ -202,6 +209,10 @@ def transcribe(audio, sample_rate=16000):
 
 def warm_up(sample_rate=16000):
     """Run a dummy transcription to warm up the engine."""
+    if _engine == "cpp":
+        # whisper.cpp doesn't need warm-up — it loads the model per call
+        print("  ASR ready (no warm-up needed for whisper.cpp)")
+        return
     silence = np.zeros(sample_rate, dtype=np.float32)
     transcribe(silence, sample_rate)
     print("  ASR warm-up complete")
