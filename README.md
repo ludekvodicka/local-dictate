@@ -198,9 +198,9 @@ Set the device number in `config.json`:
 "microphone": 2
 ```
 
-### Three ASR engines
+### Four ASR engines
 
-The tool supports three speech recognition engines. Each can be selected via command line or bat file:
+The tool supports four speech recognition engines. Each can be selected via command line or bat file:
 
 **onnx-asr** — GPU-accelerated via DirectML/CUDA, uses ONNX Runtime:
 ```
@@ -219,6 +219,25 @@ python main.py faster:large-v3
 python main.py cpp:medium
 python main.py cpp:large-v3
 ```
+
+**cloud (Vercel AI Gateway)** — cloud-based transcription via Gemini models. Requires a Vercel AI Gateway API key:
+```
+python main.py cloud:google/gemini-2.5-flash
+python main.py cloud:google/gemini-2.5-pro
+```
+
+#### Cloud setup
+
+1. Get an API key from [Vercel AI Gateway](https://vercel.com/ai-gateway)
+2. Create a `.env` file in the project root:
+   ```
+   AI_GATEWAY_API_KEY=your_key_here
+   ```
+3. Run with a cloud model: `start-cloud-gemini-flash.bat`
+
+The cloud engine sends audio to Gemini via the Vercel AI Gateway chat completions API. Audio is encoded as base64 WAV. Only Gemini models support audio input through the gateway — OpenAI models are not supported (gateway routes to Azure which lacks audio input).
+
+Note: Gemini may hallucinate on very short or silent audio clips. Works well with normal speech.
 
 ### Available models and bat files
 
@@ -240,6 +259,8 @@ python main.py cpp:large-v3
 | `start-cpp-medium.bat` | whisper.cpp | Whisper medium | medium (CPU) | better |
 | `start-cpp-large-turbo.bat` | whisper.cpp | Whisper large-v3-turbo | medium (CPU) | great |
 | `start-cpp-large.bat` | whisper.cpp | Whisper large-v3 | slow (CPU) | best |
+| `start-cloud-gemini-flash.bat` | Vercel AI Gateway | Gemini 2.5 Flash | ~2s (cloud) | great |
+| `start-cloud-gemini-pro.bat` | Vercel AI Gateway | Gemini 2.5 Pro | ~4s (cloud) | best |
 
 `list-microphones.bat` — list available audio input devices
 
@@ -248,10 +269,11 @@ python main.py cpp:large-v3
 ```
 main.py          — orchestrator, startup, hotkey loop, CLI args
 recorder.py      — audio capture via sounddevice, hold-to-record via keyboard
-transcriber.py   — multi-engine ASR (onnx-asr, faster-whisper, whisper.cpp)
+transcriber.py   — multi-engine ASR (onnx-asr, faster-whisper, whisper.cpp, Vercel cloud)
 cleanup.py       — filler word removal via Ollama HTTP API
 output.py        — clipboard + simulated Ctrl+V paste
 config.json      — user settings
+.env             — API keys (not committed to git)
 whisper-cpp/     — whisper.cpp binary + GGML models (auto-downloaded)
 start-*.bat      — launcher scripts for each engine/model combination
 ```
@@ -273,6 +295,7 @@ start-*.bat      — launcher scripts for each engine/model combination
                     │ transcriber │  onnx-asr (GPU/DirectML)
                     │             │  faster-whisper (CPU/int8)
                     │             │  whisper.cpp (CPU/C++)
+                    │             │  Vercel AI Gateway (cloud)
                     └──────┬──────┘
                            │ raw text
                     ┌──────▼──────┐
