@@ -39,6 +39,8 @@ def _parse_model_spec(model_spec):
         return "faster", model_spec[7:]
     elif model_spec.startswith("cpp:"):
         return "cpp", model_spec[4:]
+    elif model_spec.startswith("cloud:"):
+        return "cloud", model_spec[6:]
     else:
         return "onnx", model_spec
 
@@ -121,6 +123,32 @@ def _load_cpp(model_name, use_gpu):
     print(f"  ASR: {model_name} (whisper.cpp, CPU)")
 
 
+def _load_cloud(model_name, use_gpu):
+    """Load cloud model via Vercel AI Gateway."""
+    global _model
+
+    # Load API key from .env file
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    api_key = None
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("AI_GATEWAY_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip()
+    if not api_key:
+        api_key = os.environ.get("AI_GATEWAY_API_KEY")
+    if not api_key:
+        raise RuntimeError("AI_GATEWAY_API_KEY not found in .env or environment")
+
+    _model = {
+        "api_key": api_key,
+        "base_url": "https://ai-gateway.vercel.sh/v1",
+        "model": model_name,
+    }
+    print(f"  ASR: {model_name} (Vercel AI Gateway)")
+
+
 def load_model(model_name="nemo-parakeet-tdt-0.6b-v3", language=None, use_gpu=True):
     """Load an ASR model.
 
@@ -128,6 +156,7 @@ def load_model(model_name="nemo-parakeet-tdt-0.6b-v3", language=None, use_gpu=Tr
       onnx-asr:        nemo-parakeet-tdt-0.6b-v3, onnx-community/whisper-large-v3-turbo, etc.
       faster-whisper:   faster:large-v3, faster:medium, faster:small
       whisper.cpp:      cpp:large-v3, cpp:medium, cpp:small
+      cloud (Vercel):   cloud:openai/whisper-1, cloud:groq/whisper-large-v3, etc.
     """
     global _engine, _model_name, _language
 
@@ -142,6 +171,8 @@ def load_model(model_name="nemo-parakeet-tdt-0.6b-v3", language=None, use_gpu=Tr
         _load_faster(name, use_gpu)
     elif engine == "cpp":
         _load_cpp(name, use_gpu)
+    elif engine == "cloud":
+        _load_cloud(name, use_gpu)
 
 
 def _transcribe_onnx(audio, sample_rate):
@@ -160,6 +191,58 @@ def _transcribe_faster(audio, sample_rate):
         vad_filter=False,
     )
     return " ".join(seg.text.strip() for seg in segments)
+
+
+def _transcribe_cloud(audio, sample_rate):
+    """Transcribe via Vercel AI Gateway using chat completions with audio input.
+
+    Uses data:audio/wav;base64 in image_url content block — supported by Gemini models.
+    """
+    import base64
+    import io
+    import requests
+    import soundfile as sf
+
+    # Write audio to in-memory WAV
+    buf = io.BytesIO()
+    sf.write(buf, audio, sample_rate, format="WAV")
+    audio_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    lang_hint = f" The audio is in {_language} language." if _language else ""
+
+    payload = {
+        "model": _model["model"],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Transcribe this audio exactly as spoken. Output only the transcription text, nothing else. Do not add any commentary or explanation.{lang_hint}",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:audio/wav;base64,{audio_b64}",
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+    response = requests.post(
+        f"{_model['base_url']}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {_model['api_key']}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+    result = response.json()
+    return result["choices"][0]["message"]["content"].strip()
 
 
 def _transcribe_cpp(audio, sample_rate):
@@ -200,6 +283,8 @@ def transcribe(audio, sample_rate=16000):
         text = _transcribe_faster(audio, sample_rate)
     elif _engine == "cpp":
         text = _transcribe_cpp(audio, sample_rate)
+    elif _engine == "cloud":
+        text = _transcribe_cloud(audio, sample_rate)
     else:
         text = ""
 
@@ -209,9 +294,9 @@ def transcribe(audio, sample_rate=16000):
 
 def warm_up(sample_rate=16000):
     """Run a dummy transcription to warm up the engine."""
-    if _engine == "cpp":
-        # whisper.cpp doesn't need warm-up — it loads the model per call
-        print("  ASR ready (no warm-up needed for whisper.cpp)")
+    if _engine in ("cpp", "cloud"):
+        # whisper.cpp and cloud don't need warm-up
+        print(f"  ASR ready (no warm-up needed for {_engine})")
         return
     silence = np.zeros(sample_rate, dtype=np.float32)
     transcribe(silence, sample_rate)
