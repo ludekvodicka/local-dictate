@@ -87,51 +87,57 @@ def main():
     print("Press Ctrl+C to exit.\n")
 
     rec = recorder.Recorder(sample_rate=sample_rate, hotkey=hotkey, device=microphone)
+    rec.start()
 
-    while True:
-        try:
-            # Wait for recording
-            audio, duration = rec.wait_and_record()
+    try:
+        while True:
+            try:
+                # Wait for recording
+                audio, duration = rec.wait_and_record()
 
-            if audio is None or duration < min_duration:
-                if audio is not None:
-                    print(f"  Too short ({duration:.1f}s), skipping")
+                if audio is None or duration < min_duration:
+                    if audio is not None:
+                        print(f"  Too short ({duration:.1f}s), skipping")
+                    continue
+
+                # Transcribe
+                print("  Transcribing...", end="", flush=True)
+                text, asr_time = transcriber.transcribe(audio, sample_rate)
+
+                if not text.strip():
+                    print(f" (silence) [{asr_time:.2f}s]")
+                    continue
+
+                # Cleanup
+                cleanup_time = 0
+                if cleanup_enabled:
+                    text, cleanup_time = cleanup.cleanup_text(
+                        text,
+                        model=ollama_model,
+                        base_url=ollama_url,
+                        timeout=ollama_timeout,
+                        system_prompt=cleanup_prompt,
+                    )
+
+                # Paste
+                output.paste_text(text)
+
+                # Report
+                total = duration + asr_time + cleanup_time
+                parts = [f"rec {duration:.1f}s", f"asr {asr_time:.2f}s"]
+                if cleanup_enabled:
+                    parts.append(f"cleanup {cleanup_time:.2f}s")
+                print(f"\r  -> \"{text}\" [{' | '.join(parts)} | total {total:.2f}s]")
+
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                print(f"\n  Error: {e}")
                 continue
-
-            # Transcribe
-            text, asr_time = transcriber.transcribe(audio, sample_rate)
-
-            if not text.strip():
-                print(f"  (silence) [{asr_time:.2f}s]")
-                continue
-
-            # Cleanup
-            cleanup_time = 0
-            if cleanup_enabled:
-                text, cleanup_time = cleanup.cleanup_text(
-                    text,
-                    model=ollama_model,
-                    base_url=ollama_url,
-                    timeout=ollama_timeout,
-                    system_prompt=cleanup_prompt,
-                )
-
-            # Paste
-            output.paste_text(text)
-
-            # Report
-            total = duration + asr_time + cleanup_time
-            parts = [f"rec {duration:.1f}s", f"asr {asr_time:.2f}s"]
-            if cleanup_enabled:
-                parts.append(f"cleanup {cleanup_time:.2f}s")
-            print(f"  -> \"{text}\" [{' | '.join(parts)} | total {total:.2f}s]")
-
-        except KeyboardInterrupt:
-            print("\n\nExiting. Bye!")
-            sys.exit(0)
-        except Exception as e:
-            print(f"  Error: {e}")
-            continue
+    except KeyboardInterrupt:
+        print("\n\nExiting. Bye!")
+    finally:
+        rec.stop()
 
 
 if __name__ == "__main__":
