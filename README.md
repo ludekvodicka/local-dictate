@@ -111,6 +111,15 @@ pip install onnxruntime-directml
 
 Requires [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-12-8-0-download-archive) and [cuDNN 9.x](https://developer.nvidia.com/cudnn-downloads). Note: CUDA 13.x is **not yet supported** by onnxruntime.
 
+**Important:** cuDNN 9.11+ requires **compute capability 7.5+** (Turing architecture or newer). Older GPUs like GTX 1080 (Pascal, CC 6.1) are **not supported** — use DirectML instead.
+
+| Architecture | Compute Capability | Example GPUs | CUDA + cuDNN 9 |
+|---|---|---|---|
+| Pascal | 6.1 | GTX 1060, 1070, 1080 | Not supported |
+| Turing | **7.5** | **GTX 1650/1660, RTX 2060** | **Minimum supported** |
+| Ampere | 8.6 | RTX 3060, 3070, 3080 | Supported |
+| Ada Lovelace | 8.9 | RTX 4060, 4070, 4080 | Supported |
+
 ```bash
 pip uninstall onnxruntime
 pip install onnxruntime-gpu
