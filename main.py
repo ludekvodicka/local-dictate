@@ -120,7 +120,7 @@ def main():
             output.paste_text(text)
 
             # Report
-            total = asr_time + cleanup_time
+            total = duration + asr_time + cleanup_time
             parts = [f"rec {duration:.1f}s", f"asr {asr_time:.2f}s"]
             if cleanup_enabled:
                 parts.append(f"cleanup {cleanup_time:.2f}s")

@@ -181,8 +181,8 @@ def _transcribe_cpp(audio, sample_rate):
         if _language:
             cmd.extend(["-l", _language])
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        return result.stdout.strip()
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+        return result.stdout.decode("utf-8", errors="replace").strip()
     finally:
         os.unlink(tmp_path)
 
