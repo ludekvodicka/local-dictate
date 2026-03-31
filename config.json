@@ -1,5 +1,6 @@
 {
   "hotkey": "ctrl+space",
+  "microphone": 2,
   "asr_model": "onnx-community/whisper-large-v3-ONNX",
   "language": "cs",
   "sample_rate": 16000,

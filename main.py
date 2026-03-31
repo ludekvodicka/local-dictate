@@ -19,7 +19,24 @@ def load_config():
         return {}
 
 
+def list_microphones():
+    """List available input audio devices."""
+    import sounddevice as sd
+    print("Available microphones:")
+    devices = sd.query_devices()
+    for i, d in enumerate(devices):
+        if d['max_input_channels'] > 0:
+            default = " (default)" if i == sd.default.device[0] else ""
+            print(f"  {i}: {d['name']}{default}")
+    print(f"\nSet 'microphone' in config.json to the device number you want.")
+
+
 def main():
+    # Handle --list-microphones command
+    if len(sys.argv) > 1 and sys.argv[1] in ("--mics", "--list-microphones"):
+        list_microphones()
+        return
+
     config = load_config()
     hotkey = config.get("hotkey", "ctrl+space")
     sample_rate = config.get("sample_rate", 16000)
@@ -29,6 +46,7 @@ def main():
     ollama_model = config.get("ollama_model", "qwen2.5:1.5b")
     ollama_timeout = config.get("ollama_timeout", 5)
     cleanup_prompt = config.get("cleanup_prompt", cleanup._DEFAULT_PROMPT)
+    microphone = config.get("microphone", None)
 
     asr_model = config.get("asr_model", "nemo-parakeet-tdt-0.6b-v3")
     language = config.get("language", None)
@@ -40,6 +58,14 @@ def main():
     print("=" * 50)
     print("  Voice Dictation Tool")
     print("=" * 50)
+
+    # Show selected microphone
+    if microphone is not None:
+        import sounddevice as sd
+        dev = sd.query_devices(microphone)
+        print(f"\nMicrophone: {dev['name']} (device {microphone})")
+    else:
+        print(f"\nMicrophone: system default")
 
     # Load ASR model
     print(f"\nLoading ASR model: {asr_model}...")
@@ -60,7 +86,7 @@ def main():
     print(f"\nReady! Hold [{hotkey}] to dictate, release to transcribe.")
     print("Press Ctrl+C to exit.\n")
 
-    rec = recorder.Recorder(sample_rate=sample_rate, hotkey=hotkey)
+    rec = recorder.Recorder(sample_rate=sample_rate, hotkey=hotkey, device=microphone)
 
     while True:
         try:

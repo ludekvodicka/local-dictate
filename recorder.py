@@ -9,9 +9,10 @@ import sounddevice as sd
 
 
 class Recorder:
-    def __init__(self, sample_rate=16000, hotkey="ctrl+space"):
+    def __init__(self, sample_rate=16000, hotkey="ctrl+space", device=None):
         self.sample_rate = sample_rate
         self.hotkey = hotkey
+        self.device = device
         self._audio_queue = queue.Queue()
         self._is_recording = False
         self._is_pressed = False  # track key state to ignore Windows key repeats
@@ -77,6 +78,7 @@ class Recorder:
             dtype="float32",
             callback=self._audio_callback,
             blocksize=1024,
+            device=self.device,
         )
         self._stream.start()
 

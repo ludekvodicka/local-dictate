@@ -154,6 +154,7 @@ Edit `config.json` to customize:
 ```json
 {
   "hotkey": "ctrl+space",
+  "microphone": null,
   "asr_model": "onnx-community/whisper-large-v3-turbo",
   "language": "cs",
   "sample_rate": 16000,
@@ -169,7 +170,8 @@ Edit `config.json` to customize:
 | Setting | Default | Description |
 |---|---|---|
 | `hotkey` | `ctrl+space` | Key combination to hold for recording |
-| `asr_model` | `onnx-community/whisper-large-v3-turbo` | ASR model (see table above) |
+| `microphone` | `null` | Audio input device number (`null` = system default). Run `list-microphones.bat` to see available devices. |
+| `asr_model` | `onnx-community/whisper-large-v3-turbo` | ASR model (see table below) |
 | `language` | `cs` | Language code (`en`, `cs`, `de`, `fr`, etc.). Used by Whisper models. Parakeet auto-detects. |
 | `sample_rate` | `16000` | Audio sample rate in Hz |
 | `min_recording_seconds` | `0.3` | Minimum recording duration (shorter clips are ignored) |
@@ -179,24 +181,78 @@ Edit `config.json` to customize:
 | `ollama_timeout` | `5` | Seconds to wait for cleanup response |
 | `cleanup_prompt` | (see config) | System prompt for the cleanup LLM |
 
-### Available ASR models
+### Microphone selection
 
-| Model | Best for | Speed | Download |
-|---|---|---|---|
-| `onnx-community/whisper-large-v3-turbo` | Multilingual (best quality) | slow (CPU), fast (GPU) | ~1.6GB |
-| `onnx-community/whisper-small` | Multilingual (good balance) | medium | ~460MB |
-| `whisper-base` | Quick testing | fast | ~140MB |
-| `nemo-parakeet-tdt-0.6b-v3` | English & European languages | very fast | ~1.2GB |
+Run `list-microphones.bat` (or `python main.py --mics`) to see available input devices:
+
+```
+Available microphones:
+  0: Microsoft Sound Mapper - Input (default)
+  1: Microphone (Lenovo Performance Audio)
+  2: Microphone (Logitech StreamCam)
+```
+
+Set the device number in `config.json`:
+```json
+"microphone": 2
+```
+
+### Three ASR engines
+
+The tool supports three speech recognition engines. Each can be selected via command line or bat file:
+
+**onnx-asr** — GPU-accelerated via DirectML/CUDA, uses ONNX Runtime:
+```
+python main.py onnx-community/whisper-large-v3-turbo
+python main.py nemo-parakeet-tdt-0.6b-v3
+```
+
+**faster-whisper** — CPU-optimized via CTranslate2 with int8 quantization:
+```
+python main.py faster:medium
+python main.py faster:large-v3
+```
+
+**whisper.cpp** — C++ optimized CPU inference (auto-downloads GGML models):
+```
+python main.py cpp:medium
+python main.py cpp:large-v3
+```
+
+### Available models and bat files
+
+| Bat file | Engine | Model | Speed | Quality |
+|---|---|---|---|---|
+| `start-parakeet.bat` | onnx-asr | Parakeet v3 | very fast (GPU) | good (European) |
+| `start-whisper-base.bat` | onnx-asr | Whisper base | fast (GPU) | decent |
+| `start-whisper-small.bat` | onnx-asr | Whisper small | medium (GPU) | good |
+| `start-whisper-medium.bat` | onnx-asr | Whisper medium | slow (GPU) | better |
+| `start-whisper-large-turbo.bat` | onnx-asr | Whisper large-v3-turbo | medium (GPU) | great |
+| `start-whisper-large.bat` | onnx-asr | Whisper large-v3 | slow (GPU) | best |
+| `start-faster-base.bat` | faster-whisper | Whisper base | fast (CPU) | decent |
+| `start-faster-small.bat` | faster-whisper | Whisper small | fast (CPU) | good |
+| `start-faster-medium.bat` | faster-whisper | Whisper medium | medium (CPU) | better |
+| `start-faster-large-turbo.bat` | faster-whisper | Whisper large-v3-turbo | medium (CPU) | great |
+| `start-faster-large.bat` | faster-whisper | Whisper large-v3 | slow (CPU) | best |
+| `start-cpp-base.bat` | whisper.cpp | Whisper base | fast (CPU) | decent |
+| `start-cpp-small.bat` | whisper.cpp | Whisper small | fast (CPU) | good |
+| `start-cpp-medium.bat` | whisper.cpp | Whisper medium | medium (CPU) | better |
+| `start-cpp-large-turbo.bat` | whisper.cpp | Whisper large-v3-turbo | medium (CPU) | great |
+| `start-cpp-large.bat` | whisper.cpp | Whisper large-v3 | slow (CPU) | best |
+
+`list-microphones.bat` — list available audio input devices
 
 ## Architecture
 
 ```
-main.py          — orchestrator, startup, hotkey loop
+main.py          — orchestrator, startup, hotkey loop, CLI args
 recorder.py      — audio capture via sounddevice, hold-to-record via keyboard
-transcriber.py   — Whisper/Parakeet ASR via onnx-asr
+transcriber.py   — multi-engine ASR (onnx-asr, faster-whisper, whisper.cpp)
 cleanup.py       — filler word removal via Ollama HTTP API
 output.py        — clipboard + simulated Ctrl+V paste
 config.json      — user settings
+whisper-cpp/     — whisper.cpp binary + GGML models (auto-downloaded)
+start-*.bat      — launcher scripts for each engine/model combination
 ```
 
 ### Pipeline
@@ -213,8 +269,9 @@ config.json      — user settings
                     └──────┬──────┘
                            │ audio array
                     ┌──────▼──────┐
-                    │  onnx-asr   │  Whisper or Parakeet
-                    │   (ONNX RT) │  CPU or CUDA
+                    │ transcriber │  onnx-asr (GPU/DirectML)
+                    │             │  faster-whisper (CPU/int8)
+                    │             │  whisper.cpp (CPU/C++)
                     └──────┬──────┘
                            │ raw text
                     ┌──────▼──────┐
@@ -232,7 +289,7 @@ config.json      — user settings
 
 | Problem | Solution |
 |---|---|
-| No audio recorded | Check default microphone in Windows Sound settings |
+| No audio recorded | Run `list-microphones.bat` and set `microphone` in config.json |
 | Hotkey not working | Try running as administrator, or change hotkey in config.json |
 | Slow first transcription | Normal — ONNX session warm-up. Subsequent ones are faster |
 | Antivirus warning | `keyboard` library uses low-level hooks — known false positive, add exclusion |
@@ -247,6 +304,8 @@ Inspired by [SuperWhisper](https://superwhisper.com/), [Wispr Flow](https://wisp
 Powered by:
 - [OpenAI Whisper](https://github.com/openai/whisper) / [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) for speech recognition
 - [onnx-asr](https://github.com/istupakov/onnx-asr) for ONNX inference
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for CTranslate2 inference
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) for C++ inference
 - [Ollama](https://ollama.com/) + [Qwen 2.5](https://ollama.com/library/qwen2.5) for text cleanup
 
 ## License

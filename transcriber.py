@@ -12,7 +12,6 @@ import tempfile
 import time
 
 import numpy as np
-import soundfile  # comes with sounddevice
 
 _engine = None  # "onnx", "faster", "cpp"
 _model = None
@@ -151,7 +150,7 @@ def _transcribe_faster(audio, sample_rate):
         audio,
         language=_language,
         beam_size=1,
-        vad_filter=True,
+        vad_filter=False,
     )
     return " ".join(seg.text.strip() for seg in segments)
 
