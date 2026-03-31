@@ -20,7 +20,7 @@ Built as an open-source alternative to [SuperWhisper](https://superwhisper.com/)
 The console shows timing for each step:
 ```
 Recording... 2.1s
-  -> "your transcribed text here" [rec 2.1s | asr 0.34s | cleanup 0.42s | total 0.76s]
+  -> "your transcribed text here" [rec 2.1s | asr 0.34s | cleanup 0.42s | total 2.86s]
 ```
 
 ## Features
@@ -28,7 +28,8 @@ Recording... 2.1s
 - **Fully local** — no cloud, no API keys, no subscription, no data leaves your machine
 - **Global hotkey** — works in any application (browser, editor, chat, terminal)
 - **Hold-to-record** — natural walkie-talkie UX, prevents accidental recordings
-- **100+ languages** — Whisper supports Czech, English, German, French, and many more
+- **100+ languages** — Whisper supports Czech, English, German, French, and many more (with explicit language forcing)
+- **Three ASR engines** — onnx-asr (GPU/DirectML), faster-whisper (CPU/int8), whisper.cpp (CPU/C++)
 - **Filler word removal** — optional LLM cleanup removes "um", "uh", "like", etc.
 - **Auto-paste** — transcription is automatically pasted into the active window
 - **Configurable** — hotkey, model, language, cleanup prompt — all via `config.json`
@@ -71,70 +72,70 @@ Or double-click `start.bat`.
 
 On first run, the ASR model (~1.6GB for Whisper large-v3-turbo) downloads automatically from HuggingFace.
 
+## Choosing a model
+
+### Whisper vs Parakeet
+
+| Feature | Whisper models | Parakeet v3 |
+|---|---|---|
+| Language forcing | **Yes** — locks to specific language (`"language": "cs"`) | No — auto-detect only |
+| Non-English accuracy | **Better** — explicit language token prevents confusion | Confuses similar languages (Czech→Polish) |
+| English accuracy | Great | Great |
+| Speed (DirectML) | 0.2-3.8s depending on size | **0.07s** (fastest) |
+
+**For non-English languages (Czech, etc.): use Whisper.** Parakeet auto-detects language and often confuses similar Slavic languages (e.g. transcribes Czech as Polish).
+
+**For English only: Parakeet is the fastest option.**
+
+### Tested speeds (GTX 1080 / DirectML, 1s silence clip)
+
+| Model | onnx-asr (DirectML) | faster-whisper (CPU) | whisper.cpp (CPU) |
+|---|---|---|---|
+| base | 0.19s | 10.0s | 3.6s |
+| small | 11.8s | 2.8s | 15.7s |
+| medium | **0.82s** | 8.1s | 18.5s |
+| large-v3-turbo | **1.08s** | 13.3s | 25.8s |
+| large-v3 | 3.88s | 15.6s | 38.5s |
+| parakeet | **0.07s** | — | — |
+
+**Recommendation:** `start-whisper-large-turbo.bat` (onnx-asr + DirectML) is the best balance of speed and quality for non-English. For English, `start-parakeet.bat` is unbeatable at 0.07s.
+
 ## CPU vs GPU
 
-The tool works on both CPU and GPU. Here's what to expect:
+### GPU acceleration (DirectML — recommended)
 
-### CPU (default, no extra setup)
+The tool auto-detects DirectML (any DirectX 12 GPU) or CUDA and uses GPU if available.
 
-| Model | Size | Speed (3s clip) | Quality |
-|---|---|---|---|
-| `whisper-base` | ~140MB | ~1-2s | decent |
-| `onnx-community/whisper-small` | ~460MB | ~2-4s | good |
-| `nemo-parakeet-tdt-0.6b-v3` | ~1.2GB | ~0.5-1s | great (English), good (European) |
-| `onnx-community/whisper-large-v3-turbo` | ~1.6GB | ~5-10s | best multilingual |
-
-**Recommendation for CPU:** Use `whisper-small` or `parakeet` for acceptable speed. `whisper-large-v3-turbo` is accurate but slow on CPU.
-
-### GPU acceleration options
-
-The tool auto-detects and uses the best available provider (CUDA > DirectML > CPU).
-
-#### Speed comparison (whisper-large-v3-turbo, 3s clip)
-
-| Provider | Speed | Setup complexity |
-|---|---|---|
-| CPU | ~5-10s | None |
-| **DirectML** | **~1-3s** | Easy — just install one pip package |
-| **CUDA** | **~0.3-0.5s** | Requires CUDA 12.x + cuDNN 9.x |
-
-#### Option A: DirectML (easy, any DirectX 12 GPU)
-
-Works with NVIDIA, AMD, and Intel GPUs. No CUDA installation needed.
+**DirectML** works with NVIDIA, AMD, and Intel GPUs. No CUDA installation needed:
 
 ```bash
 pip uninstall onnxruntime
 pip install onnxruntime-directml
 ```
 
-#### Option B: CUDA (fastest, NVIDIA only)
-
-Requires [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-12-8-0-download-archive) and [cuDNN 9.x](https://developer.nvidia.com/cudnn-downloads). Note: CUDA 13.x is **not yet supported** by onnxruntime.
-
-**Important:** cuDNN 9.11+ requires **compute capability 7.5+** (Turing architecture or newer). Older GPUs like GTX 1080 (Pascal, CC 6.1) are **not supported** — use DirectML instead.
-
-| Architecture | Compute Capability | Example GPUs | CUDA + cuDNN 9 |
-|---|---|---|---|
-| Pascal | 6.1 | GTX 1060, 1070, 1080 | Not supported |
-| Turing | **7.5** | **GTX 1650/1660, RTX 2060** | **Minimum supported** |
-| Ampere | 8.6 | RTX 3060, 3070, 3080 | Supported |
-| Ada Lovelace | 8.9 | RTX 4060, 4070, 4080 | Supported |
+**CUDA** is faster but requires Turing GPU or newer (RTX 2060+):
 
 ```bash
 pip uninstall onnxruntime
 pip install onnxruntime-gpu
 ```
 
-#### Model speed comparison (GPU)
+Requires [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-12-8-0-download-archive) and [cuDNN 9.x](https://developer.nvidia.com/cudnn-downloads). CUDA 13.x is not yet supported.
 
-| Model | DirectML (3s clip) | CUDA (3s clip) | Notes |
+**Important:** cuDNN 9.11+ requires **compute capability 7.5+** (Turing). Older GPUs like GTX 1080 (Pascal, CC 6.1) are **not supported** — use DirectML instead.
+
+| Architecture | Compute Capability | Example GPUs | CUDA + cuDNN 9 |
 |---|---|---|---|
-| `whisper-base` | ~0.3-0.5s | ~0.1s | fastest |
-| `onnx-community/whisper-small` | ~0.5-1s | ~0.1-0.2s | good balance |
-| `nemo-parakeet-tdt-0.6b-v3` | ~0.3-0.5s | ~0.1s | fastest ASR model |
-| `onnx-community/whisper-large-v3-turbo` | ~1-3s | ~0.3-0.5s | best multilingual quality |
+| Pascal | 6.1 | GTX 1060, 1070, 1080 | Not supported — use DirectML |
+| Turing | **7.5** | **GTX 1650/1660, RTX 2060** | **Minimum supported** |
+| Ampere | 8.6 | RTX 3060, 3070, 3080 | Supported |
+| Ada Lovelace | 8.9 | RTX 4060, 4070, 4080 | Supported |
 
-**Recommendation:** Use DirectML for quick setup. Use CUDA for best performance if you have CUDA 12.x installed.
+### CPU-only alternatives
+
+If you don't have a GPU or DirectML doesn't work, use `faster-whisper` or `whisper.cpp` engines — they run on CPU with good optimization:
+- **faster-whisper**: CTranslate2 with int8 quantization — `start-faster-medium.bat`
+- **whisper.cpp**: C++ optimized — `start-cpp-medium.bat`
 
 ### GPU VRAM requirements
 
